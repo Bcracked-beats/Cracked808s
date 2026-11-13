@@ -1,0 +1,38 @@
+name: Windows candidate checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-11-13
+      - name: Configure
+        run: cmake -S . -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+      - name: Test real plugin, UI and shutdown
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install pinned installer compiler
+        run: choco install nsis --version=3.12 -y --no-progress
+      - name: Package unsigned candidate only
+        run: ./scripts/Build-Release.ps1 -BuildDir "$pwd/build" -Makensis 'C:/Program Files (x86)/NSIS/makensis.exe'
+      - name: Test install, upgrade and exact uninstall
+        run: ./tests/InstallerTests.ps1 -BuildDir "$pwd/build" -Makensis 'C:/Program Files (x86)/NSIS/makensis.exe'
+      - name: Preserve unsigned candidate for owner review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4, verified 2026-11-13
+        with:
+          name: unsigned-candidate-windows-x64
+          retention-days: 7
+          path: |
+            Cracked808s-*-Windows-x64-Setup.exe
+            Cracked808s-*-Windows-x64.zip
+            Cracked808s-*-source.zip
